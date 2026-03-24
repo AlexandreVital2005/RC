@@ -1,3 +1,4 @@
+// Francisco Nunes e Alexandre Vital
 // Write to serial port in non-canonical mode
 //
 // Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
@@ -20,7 +21,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#define BUF_SIZE 5
+#define BUF_SIZE 9
 //alarme 
 int alarmEnabled = FALSE;
 int alarmCount = 0;
@@ -82,7 +83,7 @@ int main(int argc, char *argv[])
     // Set input mode (non-canonical, no echo,...)
     newtio.c_lflag = 0;
     newtio.c_cc[VTIME] = 0; // Inter-character timer unused
-    newtio.c_cc[VMIN] = 0;  // Blocking read until 5 chars received
+    newtio.c_cc[VMIN] = 5;  // Blocking read until 5 chars received
 
     // VTIME e VMIN should be changed in order to protect with a
     // timeout the reception of the following character(s)
@@ -114,11 +115,16 @@ int main(int argc, char *argv[])
     // In non-canonical mode, '\n' does not end the writing.
     // Test this condition by placing a '\n' in the middle of the buffer.
     // The whole buffer must be sent even with the '\n'.
-    unsigned char a =  0x03 ^ 0x03 ;
-    unsigned char buf[5] = {0x7E,0x03,0x03,a,0x7E};
+    unsigned char F = 0x7E;
+    unsigned char A = 0x03;
+    unsigned char C = 0x03;
+    unsigned char D1 = 0x01;
+    unsigned char D2 = 0x40;
+    unsigned char D3 = 0x67;
+    unsigned char BCC1 = A ^ C;
+    unsigned char BCC2 = D1 ^ D2 ^ D3;
 
-    int bytes = write(fd, buf, BUF_SIZE);
-    printf("%d bytes written\n", bytes);
+    unsigned char buf[BUF_SIZE] = {F, A, C, BCC1, D1, D2, D3, BCC2, F};
     struct sigaction act = {0};
     act.sa_handler = &alarmHandler;
     if (sigaction(SIGALRM, &act, NULL) == -1)
@@ -129,20 +135,30 @@ int main(int argc, char *argv[])
 
     printf("Alarm configured\n");
 
-    while (alarmCount < 3)
+    while (alarmCount < 5)
     {
         if (alarmEnabled == FALSE)
         {
             alarm(3); // Set alarm to be triggered in 3s
             alarmEnabled = TRUE;
-        }
-        
-        unsigned char buf2[BUF_SIZE] = {0};
-        int bytesa = read(fd, buf2, 5);
+       } 
 
-        if(bytesa == 5){
-            for (int i=0; i<5; i++){ printf("var = 0x%02X\n", buf2[i]);}
+        write(fd, buf, BUF_SIZE);
+        //unsigned char buf2[BUF_SIZE] = {0};
+        int bytesa = read(fd, buf, 5);
+        printf("%d",bytesa);
+
+        if(bytesa == 5 && (buf[2] != 0x03 || buf[2] != 0x05)){
+            for (int i=0; i<5; i++){ 
+                printf("var = 0x%02X\n", buf[i]);
+            }
             break;
+        }
+
+        else if (bytesa == 5 && (buf[2] == 0x03 || buf[2] == 0x05)){
+             for (int i=0; i<5; i++){ 
+                printf("var = 0x%02X\n", buf[i]);
+            }
         }
     }
 
