@@ -1,7 +1,7 @@
 // Francisco Nunes e Alexandre Vital
 // Write to serial port in non-canonical mode
 //
-// Versao com START / DATA / END para enviar penguin.gif
+// Versao com START / DATA / END e byte stuffing para enviar penguin.gif
 
 #include <fcntl.h>
 #include <signal.h>
@@ -19,12 +19,15 @@
 #define FALSE 0
 #define TRUE  1
 
-#define MAX_RETRANS    3
-#define TIMEOUT_SECS   3
-#define MAX_FRAME_SIZE 2048
+#define MAX_RETRANS     3
+#define TIMEOUT_SECS    3
+#define MAX_FRAME_SIZE  4096
 #define DATA_CHUNK_SIZE 512
 
 #define FLAG  0x7E
+#define ESC   0x7D
+#define ESC_XOR 0x20
+
 #define A_TX  0x03   // commands from Tx / replies from Rx
 #define A_RX  0x01   // commands from Rx / replies from Tx
 
@@ -52,9 +55,8 @@
 
 typedef enum { SM_START, SM_FLAG, SM_A, SM_C, SM_BCC1_OK, SM_DONE } SMState;
 
-// ---- Alarm globals ----
-volatile int alarmFired  = FALSE;
-volatile int alarmCount  = 0;
+volatile int alarmFired = FALSE;
+volatile int alarmCount = 0;
 
 void alarmHandler(int sig)
 {
@@ -64,7 +66,7 @@ void alarmHandler(int sig)
     printf("Alarm #%d\n", alarmCount);
 }
 
-unsigned char rr_for (int nr) { return (nr == 0) ? C_RR0 : C_RR1;  }
+unsigned char rr_for(int nr)  { return (nr == 0) ? C_RR0 : C_RR1; }
 unsigned char rej_for(int nr) { return (nr == 0) ? C_REJ0 : C_REJ1; }
 
 int is_valid_ctrl(unsigned char c)
@@ -75,15 +77,24 @@ int is_valid_ctrl(unsigned char c)
             c == C_I0   || c == C_I1);
 }
 
-void build_sup_frame(unsigned char *frame,
-                     unsigned char addr,
-                     unsigned char ctrl)
+void build_sup_frame(unsigned char *frame, unsigned char addr, unsigned char ctrl)
 {
     frame[0] = FLAG;
     frame[1] = addr;
     frame[2] = ctrl;
     frame[3] = addr ^ ctrl;
     frame[4] = FLAG;
+}
+
+int stuff_byte(unsigned char byte, unsigned char *dst, int idx)
+{
+    if (byte == FLAG || byte == ESC) {
+        dst[idx++] = ESC;
+        dst[idx++] = byte ^ ESC_XOR;
+    } else {
+        dst[idx++] = byte;
+    }
+    return idx;
 }
 
 int build_iframe(unsigned char *frame,
@@ -103,23 +114,11 @@ int build_iframe(unsigned char *frame,
 
     int idx = 4;
 
-    // stuffing dos dados
     for (int i = 0; i < payload_len; i++) {
-        if (payload[i] == 0x7E || payload[i] == 0x7D) {
-            frame[idx++] = 0x7D;
-            frame[idx++] = payload[i] ^ 0x20;
-        } else {
-            frame[idx++] = payload[i];
-        }
+        idx = stuff_byte(payload[i], frame, idx);
     }
 
-    // stuffing do BCC2
-    if (bcc2 == 0x7E || bcc2 == 0x7D) {
-        frame[idx++] = 0x7D;
-        frame[idx++] = bcc2 ^ 0x20;
-    } else {
-        frame[idx++] = bcc2;
-    }
+    idx = stuff_byte(bcc2, frame, idx);
 
     frame[idx++] = FLAG;
     return idx;
@@ -127,10 +126,10 @@ int build_iframe(unsigned char *frame,
 
 int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
 {
-    SMState       state = SM_START;
-    unsigned char buf   = 0;
+    SMState state = SM_START;
+    unsigned char buf = 0;
     unsigned char Aread = 0, Cread = 0;
-    int           bytes_read;
+    int bytes_read;
 
     while (state != SM_DONE) {
         if (alarmFired) return 0;
@@ -144,41 +143,27 @@ int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
                 break;
 
             case SM_FLAG:
-                if (buf == FLAG) {
-                    state = SM_FLAG;
-                }
+                if (buf == FLAG) state = SM_FLAG;
                 else if (buf == A_TX || buf == A_RX) {
                     Aread = buf;
                     state = SM_A;
                 }
-                else {
-                    state = SM_START;
-                }
+                else state = SM_START;
                 break;
 
             case SM_A:
-                if (buf == FLAG) {
-                    state = SM_FLAG;
-                }
+                if (buf == FLAG) state = SM_FLAG;
                 else if (is_valid_ctrl(buf)) {
                     Cread = buf;
                     state = SM_C;
                 }
-                else {
-                    state = SM_START;
-                }
+                else state = SM_START;
                 break;
 
             case SM_C:
-                if (buf == FLAG) {
-                    state = SM_FLAG;
-                }
-                else if (buf == (Aread ^ Cread)) {
-                    state = SM_BCC1_OK;
-                }
-                else {
-                    state = SM_START;
-                }
+                if (buf == FLAG) state = SM_FLAG;
+                else if (buf == (Aread ^ Cread)) state = SM_BCC1_OK;
+                else state = SM_START;
                 break;
 
             case SM_BCC1_OK:
@@ -187,9 +172,7 @@ int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
                     *Cout = Cread;
                     state = SM_DONE;
                 }
-                else {
-                    state = SM_START;
-                }
+                else state = SM_START;
                 break;
 
             default:
@@ -228,14 +211,11 @@ int llopen_tx(int fd)
         }
     }
 
-    printf("llopen failed after %d attempts\n", MAX_RETRANS);
+    printf("llopen failed\n");
     return -1;
 }
 
-int llwrite_tx(int fd,
-               const unsigned char *payload,
-               int payload_len,
-               int *seqNum)
+int llwrite_tx(int fd, const unsigned char *payload, int payload_len, int *seqNum)
 {
     unsigned char iframe[MAX_FRAME_SIZE];
     unsigned char Aread = 0, Cread = 0;
@@ -257,9 +237,7 @@ int llwrite_tx(int fd,
             alarmFired = FALSE;
             printf("Received: A=0x%02X C=0x%02X\n", Aread, Cread);
 
-            if (Aread != A_TX) {
-                continue;
-            }
+            if (Aread != A_TX) continue;
 
             if (Cread == rr_for(1 - *seqNum)) {
                 printf("RR correto para Ns=%d\n", *seqNum);
@@ -289,7 +267,7 @@ int llclose_tx(int fd)
     unsigned char Aread = 0, Cread = 0;
 
     build_sup_frame(disc_frame, A_TX, C_DISC);
-    build_sup_frame(ua_frame,   A_RX, C_UA);
+    build_sup_frame(ua_frame, A_RX, C_UA);
 
     alarmCount = 0;
 
@@ -317,8 +295,6 @@ int llclose_tx(int fd)
     return -1;
 }
 
-// -------------------- Application layer helpers --------------------
-
 int get_file_size(const char *filename, long *size_out)
 {
     struct stat st;
@@ -330,11 +306,9 @@ int get_file_size(const char *filename, long *size_out)
 const char *get_basename(const char *path)
 {
     const char *slash = strrchr(path, '/');
-    if (slash == NULL) return path;
-    return slash + 1;
+    return (slash == NULL) ? path : slash + 1;
 }
 
-// codifica o tamanho do ficheiro em número mínimo de bytes
 int encode_file_size(unsigned char *out, long file_size)
 {
     unsigned char temp[8];
@@ -385,8 +359,8 @@ int build_control_packet(unsigned char control,
 int build_data_packet(const unsigned char *data, int data_len, unsigned char *packet)
 {
     packet[0] = APP_DATA;
-    packet[1] = data_len / 256;   // L2
-    packet[2] = data_len % 256;   // L1
+    packet[1] = data_len / 256;
+    packet[2] = data_len % 256;
     memcpy(&packet[3], data, data_len);
     return data_len + 3;
 }
@@ -411,7 +385,6 @@ int send_file(int fd, const char *filepath, int *sequenceNumber)
     unsigned char packet[MAX_FRAME_SIZE];
     unsigned char chunk[DATA_CHUNK_SIZE];
 
-    // START
     int packet_len = build_control_packet(APP_START, filename, file_size, packet);
     printf("Sending START packet for file %s (%ld bytes)\n", filename, file_size);
     if (llwrite_tx(fd, packet, packet_len, sequenceNumber) < 0) {
@@ -419,7 +392,6 @@ int send_file(int fd, const char *filepath, int *sequenceNumber)
         return -1;
     }
 
-    // DATA packets
     size_t nread;
     while ((nread = fread(chunk, 1, DATA_CHUNK_SIZE, f)) > 0) {
         packet_len = build_data_packet(chunk, (int)nread, packet);
@@ -436,7 +408,6 @@ int send_file(int fd, const char *filepath, int *sequenceNumber)
         return -1;
     }
 
-    // END
     packet_len = build_control_packet(APP_END, filename, file_size, packet);
     printf("Sending END packet\n");
     if (llwrite_tx(fd, packet, packet_len, sequenceNumber) < 0) {
@@ -453,8 +424,7 @@ int main(int argc, char *argv[])
     if (argc < 2) {
         printf("Incorrect program usage\n"
                "Usage: %s <SerialPort>\n"
-               "Example: %s /dev/ttyS1\n",
-               argv[0], argv[0]);
+               "Example: %s /dev/ttyS1\n", argv[0], argv[0]);
         exit(1);
     }
 
@@ -462,11 +432,16 @@ int main(int argc, char *argv[])
     const char *filepath = "penguin.gif";
 
     int fd = open(serialPortName, O_RDWR | O_NOCTTY);
-    if (fd < 0) { perror(serialPortName); exit(-1); }
+    if (fd < 0) {
+        perror(serialPortName);
+        exit(-1);
+    }
 
     struct termios oldtio, newtio;
-
-    if (tcgetattr(fd, &oldtio) == -1) { perror("tcgetattr"); exit(-1); }
+    if (tcgetattr(fd, &oldtio) == -1) {
+        perror("tcgetattr");
+        exit(-1);
+    }
 
     memset(&newtio, 0, sizeof(newtio));
     newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
@@ -478,7 +453,10 @@ int main(int argc, char *argv[])
 
     tcflush(fd, TCIOFLUSH);
 
-    if (tcsetattr(fd, TCSANOW, &newtio) == -1) { perror("tcsetattr"); exit(-1); }
+    if (tcsetattr(fd, TCSANOW, &newtio) == -1) {
+        perror("tcsetattr");
+        exit(-1);
+    }
 
     printf("New termios structure set\n");
 
@@ -488,7 +466,10 @@ int main(int argc, char *argv[])
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
 
-    if (sigaction(SIGALRM, &act, NULL) == -1) { perror("sigaction"); exit(1); }
+    if (sigaction(SIGALRM, &act, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
 
     printf("Alarm configured\n");
 
@@ -516,7 +497,10 @@ int main(int argc, char *argv[])
 
     sleep(1);
 
-    if (tcsetattr(fd, TCSANOW, &oldtio) == -1) { perror("tcsetattr"); exit(-1); }
+    if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
+        perror("tcsetattr");
+        exit(-1);
+    }
 
     close(fd);
     return 0;
