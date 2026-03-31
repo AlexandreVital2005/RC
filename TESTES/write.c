@@ -1,7 +1,7 @@
 // Francisco Nunes e Alexandre Vital
 // Write to serial port in non-canonical mode
 //
-// Versao com SET/UA, I0, I1 e DISC
+// Versao com START / DATA / END para enviar penguin.gif
 
 #include <fcntl.h>
 #include <signal.h>
@@ -21,7 +21,8 @@
 
 #define MAX_RETRANS    3
 #define TIMEOUT_SECS   3
-#define MAX_FRAME_SIZE 1024
+#define MAX_FRAME_SIZE 2048
+#define DATA_CHUNK_SIZE 512
 
 #define FLAG  0x7E
 #define A_TX  0x03   // commands from Tx / replies from Rx
@@ -40,12 +41,20 @@
 #define C_I0   0x00
 #define C_I1   0x40
 
-// ---- State machine states for supervision-frame reception ----
+// Application layer packets
+#define APP_DATA  0x01
+#define APP_START 0x02
+#define APP_END   0x03
+
+// TLV types
+#define T_FILESIZE 0x00
+#define T_FILENAME 0x01
+
 typedef enum { SM_START, SM_FLAG, SM_A, SM_C, SM_BCC1_OK, SM_DONE } SMState;
 
 // ---- Alarm globals ----
-volatile int alarmFired  = FALSE;   // set to TRUE by the signal handler
-volatile int alarmCount  = 0;       // number of times alarm has fired
+volatile int alarmFired  = FALSE;
+volatile int alarmCount  = 0;
 
 void alarmHandler(int sig)
 {
@@ -55,7 +64,6 @@ void alarmHandler(int sig)
     printf("Alarm #%d\n", alarmCount);
 }
 
-// ---- Helpers ----
 unsigned char rr_for (int nr) { return (nr == 0) ? C_RR0 : C_RR1;  }
 unsigned char rej_for(int nr) { return (nr == 0) ? C_REJ0 : C_REJ1; }
 
@@ -78,8 +86,6 @@ void build_sup_frame(unsigned char *frame,
     frame[4] = FLAG;
 }
 
-// Build an I frame.  Returns total frame length.
-// NOTE: no byte-stuffing here – add it for a fully-spec-compliant version.
 int build_iframe(unsigned char *frame,
                  unsigned char ctrl,
                  const unsigned char *payload,
@@ -88,7 +94,7 @@ int build_iframe(unsigned char *frame,
     frame[0] = FLAG;
     frame[1] = A_TX;
     frame[2] = ctrl;
-    frame[3] = frame[1] ^ frame[2];   // BCC1
+    frame[3] = frame[1] ^ frame[2];
 
     unsigned char bcc2 = 0x00;
     for (int i = 0; i < payload_len; i++) {
@@ -102,12 +108,6 @@ int build_iframe(unsigned char *frame,
     return payload_len + 6;
 }
 
-// ---------------------------------------------------------------
-// Receive ONE supervision frame.
-// Blocks byte-by-byte; returns 1 on success, 0 if alarm fired
-// before a complete frame arrived.
-// On success, *Aout and *Cout hold the address and control bytes.
-// ---------------------------------------------------------------
 int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
 {
     SMState       state = SM_START;
@@ -116,23 +116,19 @@ int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
     int           bytes_read;
 
     while (state != SM_DONE) {
-
-        // If alarm fired while we were blocked, bail out
         if (alarmFired) return 0;
 
         bytes_read = read(fd, &buf, 1);
-
         if (bytes_read <= 0) continue;
 
         switch (state) {
-
             case SM_START:
                 if (buf == FLAG) state = SM_FLAG;
                 break;
 
             case SM_FLAG:
                 if (buf == FLAG) {
-                    state = SM_FLAG;              // consecutive flags
+                    state = SM_FLAG;
                 }
                 else if (buf == A_TX || buf == A_RX) {
                     Aread = buf;
@@ -188,17 +184,12 @@ int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
     return 1;
 }
 
-// ---------------------------------------------------------------
-// llopen: send SET, wait for UA
-// Returns 1 on success, -1 on failure.
-// ---------------------------------------------------------------
 int llopen_tx(int fd)
 {
     unsigned char set_frame[5];
     unsigned char Aread = 0, Cread = 0;
 
     build_sup_frame(set_frame, A_TX, C_SET);
-
     alarmCount = 0;
 
     while (alarmCount < MAX_RETRANS) {
@@ -217,10 +208,6 @@ int llopen_tx(int fd)
                 printf("Connection opened successfully\n");
                 return 1;
             }
-            // Unexpected frame – try again
-        }
-        else {
-            // Alarm fired – loop will increment via alarmCount
         }
     }
 
@@ -228,11 +215,6 @@ int llopen_tx(int fd)
     return -1;
 }
 
-// ---------------------------------------------------------------
-// llwrite: send one I frame, wait for RR or REJ, retransmit on
-// timeout or REJ.
-// Returns payload_len on success, -1 on failure.
-// ---------------------------------------------------------------
 int llwrite_tx(int fd,
                const unsigned char *payload,
                int payload_len,
@@ -241,14 +223,13 @@ int llwrite_tx(int fd,
     unsigned char iframe[MAX_FRAME_SIZE];
     unsigned char Aread = 0, Cread = 0;
 
-    unsigned char ctrl   = (*seqNum == 0) ? C_I0 : C_I1;
-    int           flen   = build_iframe(iframe, ctrl, payload, payload_len);
+    unsigned char ctrl = (*seqNum == 0) ? C_I0 : C_I1;
+    int flen = build_iframe(iframe, ctrl, payload, payload_len);
 
     alarmCount = 0;
 
     while (alarmCount < MAX_RETRANS) {
-        printf("Sending I frame Ns=%d (attempt %d)...\n",
-               *seqNum, alarmCount + 1);
+        printf("Sending I frame Ns=%d (attempt %d)...\n", *seqNum, alarmCount + 1);
         write(fd, iframe, flen);
 
         alarmFired = FALSE;
@@ -260,46 +241,38 @@ int llwrite_tx(int fd,
             printf("Received: A=0x%02X C=0x%02X\n", Aread, Cread);
 
             if (Aread != A_TX) {
-                // Wrong address – ignore, wait for correct response
                 continue;
             }
 
             if (Cread == rr_for(1 - *seqNum)) {
-                // Correct RR for the frame we just sent
                 printf("RR correto para Ns=%d\n", *seqNum);
                 *seqNum = 1 - *seqNum;
                 return payload_len;
             }
 
             if (Cread == rej_for(*seqNum)) {
-                // Negative ACK – retransmit immediately (cancel alarm first)
                 printf("REJ recebido para Ns=%d, retransmitindo...\n", *seqNum);
-                alarmFired = FALSE;   // force re-send on next loop iteration
+                alarmFired = FALSE;
                 alarm(0);
                 continue;
             }
 
             printf("Resposta inesperada: 0x%02X\n", Cread);
         }
-        // else: alarm fired, loop will retry
     }
 
     printf("llwrite falhou para Ns=%d\n", *seqNum);
     return -1;
 }
 
-// ---------------------------------------------------------------
-// llclose: send DISC, wait for receiver's DISC, reply with UA
-// Returns 1 on success, -1 on failure.
-// ---------------------------------------------------------------
 int llclose_tx(int fd)
 {
     unsigned char disc_frame[5];
     unsigned char ua_frame[5];
     unsigned char Aread = 0, Cread = 0;
 
-    build_sup_frame(disc_frame, A_TX,  C_DISC);
-    build_sup_frame(ua_frame,   A_RX,  C_UA);   // Tx replies with A=0x01
+    build_sup_frame(disc_frame, A_TX, C_DISC);
+    build_sup_frame(ua_frame,   A_RX, C_UA);
 
     alarmCount = 0;
 
@@ -315,7 +288,6 @@ int llclose_tx(int fd)
             alarmFired = FALSE;
             printf("Received: A=0x%02X C=0x%02X\n", Aread, Cread);
 
-            // Receiver replies with DISC using A=0x01
             if (Aread == A_RX && Cread == C_DISC) {
                 printf("DISC do recetor recebido -> enviar UA final\n");
                 write(fd, ua_frame, 5);
@@ -328,9 +300,137 @@ int llclose_tx(int fd)
     return -1;
 }
 
-// ---------------------------------------------------------------
-// main
-// ---------------------------------------------------------------
+// -------------------- Application layer helpers --------------------
+
+int get_file_size(const char *filename, long *size_out)
+{
+    struct stat st;
+    if (stat(filename, &st) < 0) return -1;
+    *size_out = st.st_size;
+    return 0;
+}
+
+const char *get_basename(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    if (slash == NULL) return path;
+    return slash + 1;
+}
+
+// codifica o tamanho do ficheiro em número mínimo de bytes
+int encode_file_size(unsigned char *out, long file_size)
+{
+    unsigned char temp[8];
+    int count = 0;
+
+    if (file_size == 0) {
+        out[0] = 0;
+        return 1;
+    }
+
+    while (file_size > 0) {
+        temp[count++] = (unsigned char)(file_size & 0xFF);
+        file_size >>= 8;
+    }
+
+    for (int i = 0; i < count; i++) {
+        out[i] = temp[count - 1 - i];
+    }
+
+    return count;
+}
+
+int build_control_packet(unsigned char control,
+                         const char *filename,
+                         long file_size,
+                         unsigned char *packet)
+{
+    unsigned char size_bytes[8];
+    int size_len = encode_file_size(size_bytes, file_size);
+    int name_len = (int)strlen(filename);
+    int idx = 0;
+
+    packet[idx++] = control;
+
+    packet[idx++] = T_FILESIZE;
+    packet[idx++] = size_len;
+    memcpy(&packet[idx], size_bytes, size_len);
+    idx += size_len;
+
+    packet[idx++] = T_FILENAME;
+    packet[idx++] = name_len;
+    memcpy(&packet[idx], filename, name_len);
+    idx += name_len;
+
+    return idx;
+}
+
+int build_data_packet(const unsigned char *data, int data_len, unsigned char *packet)
+{
+    packet[0] = APP_DATA;
+    packet[1] = data_len / 256;   // L2
+    packet[2] = data_len % 256;   // L1
+    memcpy(&packet[3], data, data_len);
+    return data_len + 3;
+}
+
+int send_file(int fd, const char *filepath, int *sequenceNumber)
+{
+    FILE *f = fopen(filepath, "rb");
+    if (f == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    long file_size;
+    if (get_file_size(filepath, &file_size) < 0) {
+        perror("stat");
+        fclose(f);
+        return -1;
+    }
+
+    const char *filename = get_basename(filepath);
+
+    unsigned char packet[MAX_FRAME_SIZE];
+    unsigned char chunk[DATA_CHUNK_SIZE];
+
+    // START
+    int packet_len = build_control_packet(APP_START, filename, file_size, packet);
+    printf("Sending START packet for file %s (%ld bytes)\n", filename, file_size);
+    if (llwrite_tx(fd, packet, packet_len, sequenceNumber) < 0) {
+        fclose(f);
+        return -1;
+    }
+
+    // DATA packets
+    size_t nread;
+    while ((nread = fread(chunk, 1, DATA_CHUNK_SIZE, f)) > 0) {
+        packet_len = build_data_packet(chunk, (int)nread, packet);
+        printf("Sending DATA packet with %zu bytes\n", nread);
+        if (llwrite_tx(fd, packet, packet_len, sequenceNumber) < 0) {
+            fclose(f);
+            return -1;
+        }
+    }
+
+    if (ferror(f)) {
+        perror("fread");
+        fclose(f);
+        return -1;
+    }
+
+    // END
+    packet_len = build_control_packet(APP_END, filename, file_size, packet);
+    printf("Sending END packet\n");
+    if (llwrite_tx(fd, packet, packet_len, sequenceNumber) < 0) {
+        fclose(f);
+        return -1;
+    }
+
+    fclose(f);
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
@@ -342,6 +442,7 @@ int main(int argc, char *argv[])
     }
 
     const char *serialPortName = argv[1];
+    const char *filepath = "penguin.gif";
 
     int fd = open(serialPortName, O_RDWR | O_NOCTTY);
     if (fd < 0) { perror(serialPortName); exit(-1); }
@@ -355,11 +456,6 @@ int main(int argc, char *argv[])
     newtio.c_iflag = IGNPAR;
     newtio.c_oflag = 0;
     newtio.c_lflag = 0;
-
-    // KEY FIX: VMIN=1, VTIME=0 – read() blocks until 1 byte arrives.
-    // With VMIN=0 the read() returns immediately with 0 bytes, which
-    // caused the state machine to spin and race against the alarm,
-    // missing bytes and losing frame synchronisation.
     newtio.c_cc[VTIME] = 0;
     newtio.c_cc[VMIN]  = 1;
 
@@ -369,18 +465,16 @@ int main(int argc, char *argv[])
 
     printf("New termios structure set\n");
 
-    // Install alarm signal handler
     struct sigaction act;
     memset(&act, 0, sizeof(act));
     act.sa_handler = alarmHandler;
     sigemptyset(&act.sa_mask);
-    act.sa_flags = 0;   // do NOT use SA_RESTART so read() is interrupted
+    act.sa_flags = 0;
 
     if (sigaction(SIGALRM, &act, NULL) == -1) { perror("sigaction"); exit(1); }
 
     printf("Alarm configured\n");
 
-    // ---- Connection establishment ----
     if (llopen_tx(fd) < 0) {
         tcsetattr(fd, TCSANOW, &oldtio);
         close(fd);
@@ -389,25 +483,13 @@ int main(int argc, char *argv[])
 
     int sequenceNumber = 0;
 
-    // ---- Data transfer ----
-    unsigned char payload0[3] = {0x01, 0x40, 0x67};
-    unsigned char payload1[3] = {0x11, 0x22, 0x33};
-
-    if (llwrite_tx(fd, payload0, 3, &sequenceNumber) < 0) {
-        printf("Error sending I0\n");
+    if (send_file(fd, filepath, &sequenceNumber) < 0) {
+        printf("Error sending file %s\n", filepath);
         tcsetattr(fd, TCSANOW, &oldtio);
         close(fd);
         return -1;
     }
 
-    if (llwrite_tx(fd, payload1, 3, &sequenceNumber) < 0) {
-        printf("Error sending I1\n");
-        tcsetattr(fd, TCSANOW, &oldtio);
-        close(fd);
-        return -1;
-    }
-
-    // ---- Connection termination ----
     if (llclose_tx(fd) < 0) {
         printf("Error closing connection\n");
         tcsetattr(fd, TCSANOW, &oldtio);
