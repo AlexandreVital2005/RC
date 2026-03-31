@@ -1,6 +1,6 @@
 // Francisco Nunes e Alexandre Vital
 // Write to serial port in non-canonical mode
-//
+// atualizado
 // Modified by: Eduardo Nuno Almeida [enalmeida@fe.up.pt]
 
 #include <fcntl.h>
@@ -178,4 +178,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
