@@ -98,14 +98,31 @@ int build_iframe(unsigned char *frame,
 
     unsigned char bcc2 = 0x00;
     for (int i = 0; i < payload_len; i++) {
-        frame[4 + i] = payload[i];
         bcc2 ^= payload[i];
     }
 
-    frame[4 + payload_len] = bcc2;
-    frame[5 + payload_len] = FLAG;
+    int idx = 4;
 
-    return payload_len + 6;
+    // stuffing dos dados
+    for (int i = 0; i < payload_len; i++) {
+        if (payload[i] == 0x7E || payload[i] == 0x7D) {
+            frame[idx++] = 0x7D;
+            frame[idx++] = payload[i] ^ 0x20;
+        } else {
+            frame[idx++] = payload[i];
+        }
+    }
+
+    // stuffing do BCC2
+    if (bcc2 == 0x7E || bcc2 == 0x7D) {
+        frame[idx++] = 0x7D;
+        frame[idx++] = bcc2 ^ 0x20;
+    } else {
+        frame[idx++] = bcc2;
+    }
+
+    frame[idx++] = FLAG;
+    return idx;
 }
 
 int recv_sup_frame(int fd, unsigned char *Aout, unsigned char *Cout)
