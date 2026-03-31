@@ -1,0 +1,181 @@
+New termios structure set
+Supervision frame completa: A=0x03 C=0x03
+Recebi SET -> enviar UA
+---------------------//-------------------
+NS recebido = 0, expectedNs = 0
+BCC2 calculado = 0xA5
+BCC2 recebido  = 0xD0
+New frame with BCC2 error -> REJ
+NS recebido = 0, expectedNs = 0
+BCC2 calculado = 0xD0
+BCC2 recebido  = 0xD0
+New correct frame received
+Payload length = 18
+START packet recebido
+Nome do ficheiro: penguin.gif
+Tamanho esperado: 10968 bytes
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x4B
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x48
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x24
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xC9
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xF4
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xB0
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x58
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x58
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x11
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xBA
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x19
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xA2
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x58
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xEC
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xE6
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x39
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x42
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x1C
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x24
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x2B
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x35
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x0C
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x15
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xE8
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xB4
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x81
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x46
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x45
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xDC
+BCC2 recebido  = 0xB6
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x8E
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x1B
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x7C
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xD0
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x6E
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xD8
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x65
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xAD
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0xE2
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x6E
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x4B
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+NS recebido = 1, expectedNs = 1
+BCC2 calculado = 0x80
+BCC2 recebido  = 0xBE
+New frame with BCC2 error -> REJ
+
