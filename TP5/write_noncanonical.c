@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
         write(fd, buf, BUF_SIZE);
         //unsigned char buf2[BUF_SIZE] = {0};
         int bytesa = read(fd, buf, 5);
-        printf("%d",bytesa);
+        printf("%d\n",bytesa);
 
         if(bytesa == 5 && (buf[2] != 0x03 || buf[2] != 0x05)){
             for (int i=0; i<5; i++){ 
