@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "protocol.h"
 #include "link_layer.h"
@@ -30,6 +31,9 @@ int main(int argc, char *argv[])
     ctx.written_bytes = 0;
     ctx.transfer_done = 0;
 
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     while (!ctx.transfer_done) {
         int len = llread(fd, packet);
 
@@ -48,6 +52,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
     if (ctx.out_file != NULL) {
         fclose(ctx.out_file);
         ctx.out_file = NULL;
@@ -58,10 +64,30 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    double duration = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000;
+
+    double bytes_per_sec = 0;
+    double bits_per_sec = 0;
+    double eff = 0;
+
+    if (duration > 0)
+{
+    bytes_per_sec = ctx.written_bytes/duration;
+    bits_per_sec = (ctx.written_bytes * 8) / duration;
+    eff = bits_per_sec/38400 * 100;
+}
+
     if (ctx.transfer_done) {
         printf("Transferência concluída com sucesso\n");
         printf("Ficheiro reconstruído: %s\n", ctx.output_filename);
     }
+
+    printf("-------------------Stats-------------------\n");
+    printf("Bytes recebidos: %ld\n",ctx.written_bytes);
+    printf("Tempo total: %.3f s\n",duration);
+    printf("Taxa Bytes: %.2f bytes/s\n",bytes_per_sec);
+    printf("Taxa Bits: %.2f bits/s\n",bits_per_sec);
+    printf("Eficiência: %.2f%% \n",eff);
 
     return 0;
 }
