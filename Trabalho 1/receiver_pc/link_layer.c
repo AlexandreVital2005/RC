@@ -7,6 +7,13 @@
 #include <string.h>
 #include <unistd.h>
 
+// Teste de Erros
+#define probabilidade 0.99
+static int erros = 0;
+
+// Teste de delays
+#define DELAY 1
+
 static struct termios oldtio;
 static int ll_role = -1;
 static int ll_sequence_tx = 0;
@@ -333,6 +340,14 @@ int llread(int fd, unsigned char *buffer) {
                     int payload_len = destuffed_len - 1;
                     unsigned char bcc2_recv = destuffed[destuffed_len - 1];
                     unsigned char bcc2_calc = calculate_bcc2(destuffed, payload_len);
+
+                    /*double r = (double)rand() / RAND_MAX;
+                    if (r < probabilidade){
+                        bcc2_calc ^= 0xFF;
+                        erros++;
+                        printf("Erros: %d\n",erros);
+                    }*/
+
                     int ns_received = (Cread == C_I1) ? 1 : 0;
 
                     reply[0] = FLAG;
@@ -347,17 +362,20 @@ int llread(int fd, unsigned char *buffer) {
 
                             reply[2] = rr_for(ll_sequence_rx);
                             reply[3] = reply[1] ^ reply[2];
+                            //sleep(DELAY);
                             write(fd, reply, 5);
 
                             return payload_len;
                         } else {
                             reply[2] = rej_for(ll_sequence_rx);
                             reply[3] = reply[1] ^ reply[2];
+                            //sleep(DELAY);
                             write(fd, reply, 5);
                         }
                     } else {
                         reply[2] = rr_for(ll_sequence_rx);
                         reply[3] = reply[1] ^ reply[2];
+                        //sleep(DELAY);
                         write(fd, reply, 5);
                     }
 
