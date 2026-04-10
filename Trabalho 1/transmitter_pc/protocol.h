@@ -3,7 +3,7 @@
 
 #define BUF_SIZE         4096
 #define MAX_FRAME_SIZE   8192
-#define DATA_CHUNK_SIZE  64
+#define DATA_CHUNK_SIZE  512
 #define MAX_RETRANS      3
 #define TIMEOUT_SECS     3
 
