@@ -8,6 +8,8 @@
 
 int main(int argc, char *argv[])
 {
+    //srand(time(NULL));
+
     if (argc != 2) {
         printf("Uso: %s <SerialPort>\n", argv[0]);
         printf("Exemplo: %s /dev/ttyS1\n", argv[0]);
@@ -64,7 +66,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    double duration = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000;
+    double duration = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
     double bytes_per_sec = 0;
     double bits_per_sec = 0;
