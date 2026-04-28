@@ -9,3 +9,10 @@ Tux 3:
 Tux 2:
   IP:172.16.41.1
   MAC:8c:90:2d:fd:a5:98
+
+
+Tux 4(as server):
+  IP eth1:172.16.40.254
+  MAC eth1:ec:75:0c:c2:51:49
+  IP eth2:172.16.41.253
+  MAC eth2:ec:75:0c:c2:3c:b0
